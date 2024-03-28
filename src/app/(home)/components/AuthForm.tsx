@@ -1,17 +1,33 @@
 "use client";
 
+import React, { useEffect, useState } from "react";
+import { FaGithub, FaGoogle } from "react-icons/fa6";
+import { FieldValues, SubmitHandler, useForm } from "react-hook-form";
+import { signIn, useSession } from "next-auth/react";
+import axios from "axios";
+import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
+
 import Button from "@/components/Button";
-import React, { useState } from "react";
 import FormRow from "./FormRow";
 import AuthSocialButton from "./AuthSocialButton";
-import { FaGithub, FaGoogle } from "react-icons/fa6";
 import Input from "@/components/Input";
-import { FieldValues, SubmitHandler, useForm } from "react-hook-form";
 
 type Variant = "LOGIN" | "REGISTER";
 
 const AuthForm: React.FC = () => {
   const [variant, setVariant] = useState<Variant>("LOGIN");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const router = useRouter();
+  const session = useSession();
+
+  useEffect(() => {
+    if (session?.status === "authenticated") {
+      router.push("/users");
+    }
+  }, [session.status, router]);
+
   const {
     handleSubmit,
     register,
@@ -25,7 +41,49 @@ const AuthForm: React.FC = () => {
   });
 
   const onSubmit: SubmitHandler<FieldValues> = (data) => {
-    console.log(data);
+    setIsLoading(true);
+
+    if (variant === "REGISTER") {
+      axios
+        .post("/api/register", data)
+        .then(() => signIn("credentials", data))
+        .catch(() => toast.error("Something went wrong!"))
+        .finally(() => setIsLoading(false));
+    }
+
+    if (variant === "LOGIN") {
+      signIn("credentials", {
+        ...data,
+        redirect: false,
+      })
+        .then((callback) => {
+          if (callback?.error) {
+            toast.error("Invalid credentials");
+          }
+
+          if (callback?.ok && !callback?.error) {
+            toast.success("Logged in");
+            router.push("/users");
+          }
+        })
+        .finally(() => setIsLoading(false));
+    }
+  };
+
+  const socialAction = (action: string) => {
+    setIsLoading(true);
+
+    signIn(action, { redirect: false })
+      .then((callback) => {
+        if (callback?.error) {
+          toast.error("Invalid credentials");
+        }
+
+        if (callback?.ok && !callback?.error) {
+          toast.success("Logged in");
+        }
+      })
+      .finally(() => setIsLoading(false));
   };
 
   return (
@@ -78,8 +136,14 @@ const AuthForm: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-1 text-gray-600">
-        <AuthSocialButton icon={FaGoogle} />
-        <AuthSocialButton icon={FaGithub} />
+        <AuthSocialButton
+          icon={FaGoogle}
+          onClick={() => socialAction("github")}
+        />
+        <AuthSocialButton
+          icon={FaGithub}
+          onClick={() => socialAction("google")}
+        />
       </div>
 
       <p className="text-center text-sm text-gray-500">
